@@ -1,0 +1,7 @@
+
+node_modules/*
+.env
+.env_docker
+env.cmd
+.nyc_output/
+.env_db

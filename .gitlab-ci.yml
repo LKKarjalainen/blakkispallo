@@ -1,0 +1,24 @@
+image: node:22-bookworm
+
+services:
+  - postgres:17-alpine
+
+variables:
+  # Throwaway CI database only
+  POSTGRES_HOST_AUTH_METHOD: trust
+
+cache:
+  paths:
+  - node_modules/
+
+stages:
+  - test
+
+mocha:
+  stage: test
+  script:
+    - npm ci
+    - npm audit --omit=dev
+    - export $(cat .env_tests)
+    - node setup_test_db.js
+    - npx mocha --exit test/*

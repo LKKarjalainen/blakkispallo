@@ -1,0 +1,72 @@
+# Hardened setup: the database has no published port and is reachable only
+# from the bot over an internal network. The bot runs as non-root with a
+# read-only filesystem, no capabilities and resource limits.
+
+services:
+
+  blakkis:
+    container_name: blakkis-bot
+    build: .
+    env_file: .env_docker
+    networks:
+      - db
+      - egress
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+
+  db:
+    container_name: blakkis-db
+    image: postgres:17-alpine
+    env_file: .env_db
+    networks:
+      - db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d:ro
+      - ./app/schema.sql:/schema/schema.sql:ro
+    # TCP check: during first-run init Postgres listens only on its socket,
+    # so this passes only once the role, database and tables exist.
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "blakkis", "-d", "blakkis"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
+
+networks:
+  db:
+    internal: true # no route to the internet or the host
+  egress: {}       # the bot needs to reach api.telegram.org
+
+volumes:
+  pgdata: {}
